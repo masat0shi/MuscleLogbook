@@ -13,26 +13,27 @@ interface Stats {
   streak: number;
 }
 
+function StatSkeleton() {
+  return <div className="h-8 w-16 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />;
+}
+
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<Stats>({
-    totalWorkouts: 0,
-    totalDays: 0,
-    thisMonthDays: 0,
-    streak: 0,
-  });
+  const [stats, setStats] = useState<Stats | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const [{ data: { user } }] = await Promise.all([
+        supabase.auth.getUser(),
+        fetchStats(),
+      ]);
       if (!user) {
         router.push('/login');
       } else {
         setIsAuthenticated(true);
-        fetchStats();
       }
       setLoading(false);
     };
@@ -119,9 +120,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">総記録数</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats.totalWorkouts}
-              </p>
+              {stats === null ? <StatSkeleton /> : (
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalWorkouts}</p>
+              )}
             </div>
             <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
               <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -135,9 +136,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">総トレーニング日</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats.totalDays}
-              </p>
+              {stats === null ? <StatSkeleton /> : (
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalDays}</p>
+              )}
             </div>
             <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
               <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,9 +152,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">今月</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats.thisMonthDays}日
-              </p>
+              {stats === null ? <StatSkeleton /> : (
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.thisMonthDays}日</p>
+              )}
             </div>
             <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
               <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,9 +168,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">連続日数</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats.streak}日
-              </p>
+              {stats === null ? <StatSkeleton /> : (
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.streak}日</p>
+              )}
             </div>
             <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
               <svg className="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

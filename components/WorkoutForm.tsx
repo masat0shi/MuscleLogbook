@@ -17,12 +17,14 @@ interface WorkoutFormProps {
   onSuccess?: () => void;      // 保存成功時のコールバック
   initialData?: WorkoutFormData; // 編集時の初期データ
   workoutId?: string;          // 編集対象のワークアウトID（新規作成時はundefined）
+  preloadedExercises?: Exercise[]; // 事前取得済みの種目リスト（record/page.tsx から渡される）
 }
 
-export default function WorkoutForm({ onSuccess, initialData, workoutId }: WorkoutFormProps) {
+export default function WorkoutForm({ onSuccess, initialData, workoutId, preloadedExercises }: WorkoutFormProps) {
   // 状態管理
-  const [exercises, setExercises] = useState<Exercise[]>([]);                    // 種目リスト
-  const [hiddenExerciseIds, setHiddenExerciseIds] = useState<Set<string>>(new Set()); // 非表示種目ID
+  const [exercises, setExercises] = useState<Exercise[]>(preloadedExercises ?? []);
+  const [exercisesLoading, setExercisesLoading] = useState(!preloadedExercises);
+  const [exerciseVideoUrls, setExerciseVideoUrls] = useState<Map<string, string>>(new Map()); // ユーザー設定の動画URL
   const [loading, setLoading] = useState(false);                                  // 保存中フラグ
   const [error, setError] = useState<string | null>(null);                       // エラーメッセージ
   const [success, setSuccess] = useState(false);                                  // 成功フラグ
@@ -47,36 +49,46 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId }: Worko
    * 種目一覧を取得（非表示の種目を除外）
    */
   const fetchExercises = async () => {
-    // 全種目を取得
-    const { data, error } = await supabase
-      .from('exercises')
-      .select('*')
-      .order('category', { ascending: true })
-      .order('name', { ascending: true });
-
-    // 非表示設定を取得
-    const { data: hiddenData } = await supabase
-      .from('hidden_exercises')
-      .select('exercise_id');
+    // セレクト表示に必要な2テーブルを先に取得
+    const [
+      { data, error },
+      { data: hiddenData },
+    ] = await Promise.all([
+      supabase.from('exercises').select('*').order('category').order('name'),
+      supabase.from('hidden_exercises').select('exercise_id'),
+    ]);
 
     const hiddenIds = new Set((hiddenData || []).map(h => h.exercise_id));
-    setHiddenExerciseIds(hiddenIds);
 
     if (error) {
       console.error('種目の取得に失敗:', error);
     } else {
-      // 非表示の種目を除外して設定
       const visibleExercises = (data || []).filter(e => !hiddenIds.has(e.id));
       setExercises(visibleExercises);
-      // 初期選択がない場合は最初の種目を選択
       if (visibleExercises.length > 0 && !formData.exercise_id) {
         setFormData(prev => ({ ...prev, exercise_id: visibleExercises[0].id }));
       }
     }
+    setExercisesLoading(false);
+
+    // 動画URLは種目表示後に非同期で取得
+    const { data: videoUrlData } = await supabase
+      .from('exercise_video_urls').select('exercise_id, video_url');
+    setExerciseVideoUrls(new Map((videoUrlData || []).map(v => [v.exercise_id, v.video_url])));
   };
 
   useEffect(() => {
-    fetchExercises();
+    if (preloadedExercises) {
+      // プリロード済みの場合は初期選択だけ設定し、video_urls のみ取得
+      if (preloadedExercises.length > 0 && !formData.exercise_id) {
+        setFormData(prev => ({ ...prev, exercise_id: preloadedExercises[0].id }));
+      }
+      supabase.from('exercise_video_urls').select('exercise_id, video_url').then(({ data }) => {
+        setExerciseVideoUrls(new Map((data || []).map(v => [v.exercise_id, v.video_url])));
+      });
+    } else {
+      fetchExercises();
+    }
   }, []);
 
   /**
@@ -305,26 +317,32 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId }: Worko
             id="exercise"
             value={formData.exercise_id}
             onChange={(e) => setFormData(prev => ({ ...prev, exercise_id: e.target.value }))}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            disabled={exercisesLoading}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-60 disabled:cursor-wait"
             required
           >
-            {Object.entries(groupedExercises).map(([category, categoryExercises]) => (
-              <optgroup key={category} label={category}>
-                {categoryExercises.map((exercise) => (
-                  <option key={exercise.id} value={exercise.id}>
-                    {exercise.name}{exercise.user_id ? ' ★' : ''}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
+            {exercisesLoading ? (
+              <option>読み込み中...</option>
+            ) : (
+              Object.entries(groupedExercises).map(([category, categoryExercises]) => (
+                <optgroup key={category} label={category}>
+                  {categoryExercises.map((exercise) => (
+                    <option key={exercise.id} value={exercise.id}>
+                      {exercise.name}{exercise.user_id ? ' ★' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            )}
           </select>
-          {/* 選択中の種目に動画URLがある場合、リンクを表示 */}
+          {/* 選択中の種目に動画URLがある場合、リンクを表示（ユーザー設定URLを優先） */}
           {(() => {
             const selectedExercise = exercises.find(e => e.id === formData.exercise_id);
-            if (selectedExercise?.video_url) {
+            const videoUrl = exerciseVideoUrls.get(formData.exercise_id) || selectedExercise?.video_url;
+            if (videoUrl) {
               return (
                 <a
-                  href={selectedExercise.video_url}
+                  href={videoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2 inline-flex items-center text-sm text-red-500 hover:text-red-600"

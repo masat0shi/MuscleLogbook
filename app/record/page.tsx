@@ -4,25 +4,41 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import WorkoutForm from '@/components/WorkoutForm';
+import type { Exercise } from '@/types';
 
 export default function RecordPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [preloadedExercises, setPreloadedExercises] = useState<Exercise[]>([]);
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const [
+        { data: { user } },
+        { data: exercisesData },
+        { data: hiddenData },
+      ] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('exercises').select('*').order('category').order('name'),
+        supabase.from('hidden_exercises').select('exercise_id'),
+      ]);
+
       if (!user) {
         router.push('/login');
-      } else {
-        setIsAuthenticated(true);
+        setLoading(false);
+        return;
       }
+
+      const hiddenIds = new Set((hiddenData || []).map((h: { exercise_id: string }) => h.exercise_id));
+      const visible = (exercisesData || []).filter((e: Exercise) => !hiddenIds.has(e.id));
+      setPreloadedExercises(visible);
+      setIsAuthenticated(true);
       setLoading(false);
     };
     checkAuth();
-  }, [router, supabase.auth]);
+  }, [router, supabase]);
 
   if (loading) {
     return (
@@ -43,7 +59,7 @@ export default function RecordPage() {
       </h1>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <WorkoutForm />
+        <WorkoutForm preloadedExercises={preloadedExercises} />
       </div>
     </div>
   );

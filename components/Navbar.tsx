@@ -12,7 +12,7 @@ const navItems = [
   { href: '/history', label: '履歴', icon: '📋' },
   { href: '/stats', label: 'グラフ', icon: '📊' },
   { href: '/calendar', label: 'カレンダー', icon: '📅' },
-  { href: '/settings', label: '設定', icon: '⚙️' },
+  { href: '/settings', label: 'メニュー', icon: '📚' },
 ];
 
 export default function Navbar() {

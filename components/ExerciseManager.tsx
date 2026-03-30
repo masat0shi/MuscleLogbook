@@ -7,7 +7,7 @@
  * デフォルト種目の表示/非表示設定を管理する。
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
 import type { Exercise } from '@/types';
 import { EXERCISE_CATEGORIES } from '@/types';
@@ -16,6 +16,7 @@ export default function ExerciseManager() {
   // 状態管理
   const [exercises, setExercises] = useState<Exercise[]>([]);                    // 種目一覧
   const [hiddenExerciseIds, setHiddenExerciseIds] = useState<Set<string>>(new Set()); // 非表示種目IDのセット
+  const [exerciseVideoUrls, setExerciseVideoUrls] = useState<Map<string, string>>(new Map()); // デフォルト種目の動画URL
   const [loading, setLoading] = useState(true);                                   // 読み込み中フラグ
   const [showForm, setShowForm] = useState(false);                               // 追加/編集フォーム表示
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null); // 編集中の種目
@@ -23,8 +24,12 @@ export default function ExerciseManager() {
   const [saving, setSaving] = useState(false);                                    // 保存中フラグ
   const [error, setError] = useState<string | null>(null);                       // エラーメッセージ
   const [showHidden, setShowHidden] = useState(false);                           // 非表示種目を表示するか
+  const [editingVideoExercise, setEditingVideoExercise] = useState<Exercise | null>(null); // 動画URL編集中の種目
+  const [videoUrlInput, setVideoUrlInput] = useState('');                        // 動画URL入力値
 
   const supabase = createClient();
+  const formRef = useRef<HTMLDivElement>(null);
+
 
   /**
    * 種目一覧と非表示設定を取得
@@ -55,6 +60,13 @@ export default function ExerciseManager() {
     } else {
       setHiddenExerciseIds(new Set((hiddenData || []).map(h => h.exercise_id)));
     }
+
+    // ユーザー設定の動画URLを取得
+    const { data: videoUrlData } = await supabase
+      .from('exercise_video_urls')
+      .select('exercise_id, video_url');
+
+    setExerciseVideoUrls(new Map((videoUrlData || []).map(v => [v.exercise_id, v.video_url])));
 
     setLoading(false);
   };
@@ -125,6 +137,10 @@ export default function ExerciseManager() {
     });
     setShowForm(true);
     setError(null);
+    // DOM更新後にスクロール（すでにフォームが表示中の場合も対応）
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   };
 
   const handleDelete = async (exercise: Exercise) => {
@@ -142,6 +158,51 @@ export default function ExerciseManager() {
     } else {
       fetchExercises();
     }
+  };
+
+  const handleHideAllDefaults = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const defaultExercises = exercises.filter(e => !e.user_id && !hiddenExerciseIds.has(e.id));
+    if (defaultExercises.length === 0) return;
+
+    const inserts = defaultExercises.map(e => ({ user_id: user.id, exercise_id: e.id }));
+    const { error } = await supabase.from('hidden_exercises').insert(inserts);
+
+    if (!error) {
+      setHiddenExerciseIds(prev => new Set([...Array.from(prev), ...defaultExercises.map(e => e.id)]));
+    }
+  };
+
+  const handleSaveVideoUrl = async () => {
+    if (!editingVideoExercise) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (videoUrlInput.trim() === '') {
+      // URL削除
+      await supabase
+        .from('exercise_video_urls')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('exercise_id', editingVideoExercise.id);
+      setExerciseVideoUrls(prev => {
+        const next = new Map(prev);
+        next.delete(editingVideoExercise.id);
+        return next;
+      });
+    } else {
+      // URL追加/更新 (upsert)
+      const { error } = await supabase
+        .from('exercise_video_urls')
+        .upsert({ user_id: user.id, exercise_id: editingVideoExercise.id, video_url: videoUrlInput.trim() });
+      if (!error) {
+        setExerciseVideoUrls(prev => new Map(prev).set(editingVideoExercise.id, videoUrlInput.trim()));
+      }
+    }
+    setEditingVideoExercise(null);
+    setVideoUrlInput('');
   };
 
   const handleToggleVisibility = async (exercise: Exercise) => {
@@ -175,7 +236,7 @@ export default function ExerciseManager() {
         });
 
       if (!error) {
-        setHiddenExerciseIds(prev => new Set([...prev, exercise.id]));
+        setHiddenExerciseIds(prev => new Set([...Array.from(prev), exercise.id]));
       }
     }
   };
@@ -205,9 +266,43 @@ export default function ExerciseManager() {
 
   return (
     <div className="space-y-6">
+      {/* 動画URL編集モーダル */}
+      {editingVideoExercise && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+              参考動画URLを設定
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{editingVideoExercise.name}</p>
+            <input
+              type="url"
+              value={videoUrlInput}
+              onChange={(e) => setVideoUrlInput(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white mb-4"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autoFocus
+            />
+            <div className="flex space-x-3">
+              <button
+                onClick={handleSaveVideoUrl}
+                className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => { setEditingVideoExercise(null); setVideoUrlInput(''); }}
+                className="flex-1 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Form */}
       {showForm ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <div ref={formRef} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {editingExercise ? '種目を編集' : '新しい種目を追加'}
           </h3>
@@ -291,6 +386,16 @@ export default function ExerciseManager() {
         </button>
       )}
 
+      {/* Hide all default exercises */}
+      {exercises.some(e => !e.user_id && !hiddenExerciseIds.has(e.id)) && (
+        <button
+          onClick={handleHideAllDefaults}
+          className="w-full py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          デフォルト種目を全て非表示にする
+        </button>
+      )}
+
       {/* Toggle to show hidden exercises */}
       <div className="flex items-center justify-between">
         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -338,10 +443,10 @@ export default function ExerciseManager() {
                   >
                     <div className="flex items-center space-x-3">
                       <span className="text-gray-900 dark:text-white">{exercise.name}</span>
-                      {/* 動画リンクアイコン */}
-                      {exercise.video_url && (
+                      {/* 動画リンクアイコン（ユーザー設定URLを優先） */}
+                      {(exerciseVideoUrls.get(exercise.id) || exercise.video_url) && (
                         <a
-                          href={exercise.video_url}
+                          href={exerciseVideoUrls.get(exercise.id) || exercise.video_url || ''}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-red-500 hover:text-red-600"
@@ -364,6 +469,25 @@ export default function ExerciseManager() {
                       )}
                     </div>
                     <div className="flex items-center space-x-2">
+                      {/* 動画URLボタン（デフォルト種目のみ） */}
+                      {isDefault && (
+                        <button
+                          onClick={() => {
+                            setEditingVideoExercise(exercise);
+                            setVideoUrlInput(exerciseVideoUrls.get(exercise.id) || '');
+                          }}
+                          className={`p-1.5 rounded transition-colors ${
+                            exerciseVideoUrls.has(exercise.id)
+                              ? 'text-red-500 hover:text-red-600'
+                              : 'text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400'
+                          }`}
+                          title="参考動画URLを設定"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
+                          </svg>
+                        </button>
+                      )}
                       {/* Visibility toggle for default exercises */}
                       {isDefault && (
                         <button
