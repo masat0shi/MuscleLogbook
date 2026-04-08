@@ -94,13 +94,13 @@ export default function WorkoutList({ filterDate, limit, showActions = true }: W
    * 日付を日本語形式にフォーマット
    */
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'short',
-    });
+    const date = new Date(dateString + 'T00:00:00');
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const w = weekdays[date.getDay()];
+    return `${y}年${m}月${d}日(${w})`;
   };
 
   // ワークアウトを日付別にグループ化
