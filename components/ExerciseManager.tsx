@@ -196,7 +196,10 @@ export default function ExerciseManager() {
       // URL追加/更新 (upsert)
       const { error } = await supabase
         .from('exercise_video_urls')
-        .upsert({ user_id: user.id, exercise_id: editingVideoExercise.id, video_url: videoUrlInput.trim() });
+        .upsert(
+          { user_id: user.id, exercise_id: editingVideoExercise.id, video_url: videoUrlInput.trim() },
+          { onConflict: 'user_id,exercise_id' }
+        );
       if (!error) {
         setExerciseVideoUrls(prev => new Map(prev).set(editingVideoExercise.id, videoUrlInput.trim()));
       }
