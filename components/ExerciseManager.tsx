@@ -182,11 +182,15 @@ export default function ExerciseManager() {
 
     if (videoUrlInput.trim() === '') {
       // URL削除
-      await supabase
+      const { error } = await supabase
         .from('exercise_video_urls')
         .delete()
         .eq('user_id', user.id)
         .eq('exercise_id', editingVideoExercise.id);
+      if (error) {
+        alert('削除に失敗しました: ' + error.message);
+        return;
+      }
       setExerciseVideoUrls(prev => {
         const next = new Map(prev);
         next.delete(editingVideoExercise.id);
@@ -200,9 +204,11 @@ export default function ExerciseManager() {
           { user_id: user.id, exercise_id: editingVideoExercise.id, video_url: videoUrlInput.trim() },
           { onConflict: 'user_id,exercise_id' }
         );
-      if (!error) {
-        setExerciseVideoUrls(prev => new Map(prev).set(editingVideoExercise.id, videoUrlInput.trim()));
+      if (error) {
+        alert('保存に失敗しました: ' + error.message);
+        return;
       }
+      setExerciseVideoUrls(prev => new Map(prev).set(editingVideoExercise.id, videoUrlInput.trim()));
     }
     setEditingVideoExercise(null);
     setVideoUrlInput('');
