@@ -47,6 +47,31 @@ export interface ExerciseVideoUrl {
 
 export type ExerciseCategory = '胸' | '背中' | '脚' | '肩' | '腕' | 'コア';
 
+export type CardioActivityType = 'running' | 'walking';
+
+export interface CardioLog {
+  id: string;
+  user_id: string;
+  activity_type: CardioActivityType;
+  distance: number | null;   // km
+  duration: number | null;   // 分
+  incline: number | null;    // %
+  speed: number | null;      // km/h
+  date: string;
+  memo: string | null;
+  created_at: string;
+}
+
+export interface CardioFormData {
+  activity_type: CardioActivityType;
+  distance: string;
+  duration: string;
+  incline: string;
+  speed: string;
+  date: string;
+  memo: string;
+}
+
 export const EXERCISE_CATEGORIES: ExerciseCategory[] = [
   '胸',
   '背中',
