@@ -182,14 +182,14 @@ body {
 }
 
 .react-calendar__tile--workout {
-  background: #10b981;
-  color: white;
+  background: #fed7aa;
+  color: #7c2d12;
   border-radius: 0.375rem;
 }
 
 .react-calendar__tile--workout:enabled:hover,
 .react-calendar__tile--workout:enabled:focus {
-  background: #059669;
+  background: #fdba74;
 }
 
 @media (prefers-color-scheme: dark) {

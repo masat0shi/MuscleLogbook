@@ -10,11 +10,19 @@ interface Stats {
   totalWorkouts: number;
   totalDays: number;
   thisMonthDays: number;
-  streak: number;
 }
 
 function StatSkeleton() {
   return <div className="h-8 w-16 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />;
+}
+
+function getEncouragement(days: number): { emoji: string; message: string; sub: string; color: string } {
+  if (days === 0)  return { emoji: '🌱', message: 'さあ、始めよう！',       sub: '最初の一歩が一番大事',         color: 'bg-gray-100 dark:bg-gray-700' };
+  if (days <= 3)   return { emoji: '🔥', message: 'いいスタート！',          sub: 'この調子で続けていこう',        color: 'bg-orange-50 dark:bg-orange-950' };
+  if (days <= 7)   return { emoji: '💪', message: '順調だよ！',              sub: '習慣になってきた証拠',          color: 'bg-blue-50 dark:bg-blue-950' };
+  if (days <= 14)  return { emoji: '⭐', message: 'すごい！',               sub: '月の半分以上トレーニングしてる', color: 'bg-yellow-50 dark:bg-yellow-950' };
+  if (days <= 20)  return { emoji: '🏆', message: 'かなりやり手だね！',      sub: '上位トレーニーの仲間入り',      color: 'bg-purple-50 dark:bg-purple-950' };
+  return           { emoji: '👑', message: '伝説のトレーニー！',             sub: 'ほぼ毎日動いてる、すごすぎる', color: 'bg-pink-50 dark:bg-pink-950' };
 }
 
 export default function HomePage() {
@@ -41,53 +49,34 @@ export default function HomePage() {
   }, [router, supabase.auth]);
 
   const fetchStats = async () => {
-    const { data: workouts, error } = await supabase
-      .from('workouts')
-      .select('date')
-      .order('date', { ascending: false });
+    const [
+      { data: workouts, error },
+      { data: cardioLogs },
+    ] = await Promise.all([
+      supabase.from('workouts').select('date').order('date', { ascending: false }),
+      supabase.from('cardio_logs').select('date'),
+    ]);
 
     if (error) {
       console.error('Error fetching stats:', error);
       return;
     }
 
-    const uniqueDates = [...new Set(workouts?.map((w) => w.date) || [])];
+    const allDates = [
+      ...(workouts?.map((w) => w.date) || []),
+      ...(cardioLogs?.map((c) => c.date) || []),
+    ];
+    const uniqueDates = [...new Set(allDates)];
     const now = new Date();
     const thisMonth = uniqueDates.filter((date) => {
       const d = new Date(date);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
 
-    // Calculate streak
-    let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const sortedDates = uniqueDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
-    for (let i = 0; i < sortedDates.length; i++) {
-      const workoutDate = new Date(sortedDates[i]);
-      workoutDate.setHours(0, 0, 0, 0);
-
-      const expectedDate = new Date(today);
-      expectedDate.setDate(today.getDate() - i);
-      expectedDate.setHours(0, 0, 0, 0);
-
-      if (workoutDate.getTime() === expectedDate.getTime()) {
-        streak++;
-      } else if (i === 0 && workoutDate.getTime() === expectedDate.getTime() - 86400000) {
-        // If first workout is yesterday, still count the streak
-        streak++;
-      } else {
-        break;
-      }
-    }
-
     setStats({
-      totalWorkouts: workouts?.length || 0,
+      totalWorkouts: (workouts?.length || 0) + (cardioLogs?.length || 0),
       totalDays: uniqueDates.length,
       thisMonthDays: thisMonth.length,
-      streak,
     });
   };
 
@@ -164,21 +153,19 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">連続日数</p>
-              {stats === null ? <StatSkeleton /> : (
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.streak}日</p>
-              )}
+        {/* 応援カード */}
+        {(() => {
+          const enc = getEncouragement(stats?.thisMonthDays ?? 0);
+          return (
+            <div className={`rounded-lg shadow-md p-4 flex items-center gap-3 ${enc.color}`}>
+              <span className="text-3xl">{enc.emoji}</span>
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">{enc.message}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{enc.sub}</p>
+              </div>
             </div>
-            <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
-              <svg className="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-              </svg>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Quick Actions */}

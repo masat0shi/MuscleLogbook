@@ -1,56 +1,36 @@
 'use client';
 
-/**
- * WorkoutCalendar - トレーニングカレンダーコンポーネント
- *
- * カレンダー形式でトレーニング実施日を表示。
- * 日付をクリックするとその日のトレーニング内容を確認できる。
- */
-
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import { createClient } from '@/lib/supabase';
 import WorkoutList from './WorkoutList';
+import CardioList from './CardioList';
 
-/** react-calendarの値の型定義 */
 type ValuePiece = Date | null;
 type Value = ValuePiece | [ValuePiece, ValuePiece];
 
 export default function WorkoutCalendar() {
-  // 状態管理
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);      // 選択中の日付
-  const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set()); // トレーニング実施日のセット
-  const [loading, setLoading] = useState(true);                              // 読み込み中フラグ
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set());
+  const [cardioDates, setCardioDates] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
   const supabase = createClient();
 
-  /**
-   * トレーニング実施日の一覧を取得
-   */
   useEffect(() => {
-    const fetchWorkoutDates = async () => {
+    const fetchDates = async () => {
       setLoading(true);
-
-      const { data, error } = await supabase
-        .from('workouts')
-        .select('date');
-
-      if (error) {
-        console.error('トレーニング日の取得に失敗:', error);
-      } else {
-        // 日付のSetを作成
-        const dates = new Set((data || []).map((w: { date: string }) => w.date));
-        setWorkoutDates(dates);
-      }
+      const [{ data: workouts }, { data: cardios }] = await Promise.all([
+        supabase.from('workouts').select('date'),
+        supabase.from('cardio_logs').select('date'),
+      ]);
+      setWorkoutDates(new Set((workouts || []).map((w: { date: string }) => w.date)));
+      setCardioDates(new Set((cardios || []).map((c: { date: string }) => c.date)));
       setLoading(false);
     };
-
-    fetchWorkoutDates();
+    fetchDates();
   }, [supabase]);
 
-  /**
-   * カレンダーの日付選択ハンドラー
-   */
   const handleDateChange = (value: Value) => {
     if (value instanceof Date) {
       setSelectedDate(value);
@@ -59,9 +39,6 @@ export default function WorkoutCalendar() {
     }
   };
 
-  /**
-   * DateオブジェクトをYYYY-MM-DD形式の文字列に変換
-   */
   const formatDateToString = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -69,50 +46,42 @@ export default function WorkoutCalendar() {
     return `${year}-${month}-${day}`;
   };
 
-  /**
-   * カレンダーのタイルにクラス名を付与
-   * トレーニング実施日に特別なスタイルを適用
-   */
   const tileClassName = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
-      const dateString = formatDateToString(date);
-      if (workoutDates.has(dateString)) {
+      const d = formatDateToString(date);
+      if (workoutDates.has(d) || cardioDates.has(d)) {
         return 'react-calendar__tile--workout';
       }
     }
     return null;
   };
 
-  /**
-   * カレンダーのタイルに追加コンテンツを表示
-   * トレーニング実施日にドットを表示
-   */
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
-      const dateString = formatDateToString(date);
-      if (workoutDates.has(dateString)) {
-        return (
-          <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-          </div>
-        );
-      }
+      const d = formatDateToString(date);
+      const hasWorkout = workoutDates.has(d);
+      const hasCardio = cardioDates.has(d);
+      if (!hasWorkout && !hasCardio) return null;
+      return (
+        <div className="flex justify-center gap-0.5 mt-0.5">
+          {hasWorkout && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>}
+          {hasCardio  && <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>}
+        </div>
+      );
     }
     return null;
   };
 
-  /**
-   * 今月のトレーニング日数を計算
-   */
-  const getThisMonthWorkoutCount = (): number => {
+  const allActiveDates = new Set([...Array.from(workoutDates), ...Array.from(cardioDates)]);
+
+  const getThisMonthCount = (dates: Set<string>): number => {
     const now = new Date();
-    return Array.from(workoutDates).filter((date) => {
-      const d = new Date(date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return Array.from(dates).filter((d) => {
+      const date = new Date(d);
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
     }).length;
   };
 
-  // ローディング表示
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -121,25 +90,34 @@ export default function WorkoutCalendar() {
     );
   }
 
+  const selectedDateStr = selectedDate ? formatDateToString(selectedDate) : null;
+  const selectedHasWorkout = selectedDateStr ? workoutDates.has(selectedDateStr) : false;
+  const selectedHasCardio  = selectedDateStr ? cardioDates.has(selectedDateStr) : false;
+
   return (
     <div className="space-y-6">
-      {/* カレンダー表示エリア */}
+      {/* カレンダー */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
         {/* 凡例 */}
-        <div className="mb-4">
-          <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-              <span>トレーニング実施日</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-yellow-400 rounded-full mr-2"></div>
-              <span>今日</span>
-            </div>
+        <div className="mb-4 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 bg-orange-500 rounded-sm"></div>
+            <span>実施日</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+            <span>筋トレ</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
+            <span>カーディオ</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full"></div>
+            <span>今日</span>
           </div>
         </div>
 
-        {/* カレンダー本体 */}
         <Calendar
           onChange={handleDateChange}
           value={selectedDate}
@@ -155,21 +133,34 @@ export default function WorkoutCalendar() {
         />
       </div>
 
-      {/* 選択した日のトレーニング一覧 */}
+      {/* 選択日の記録 */}
       {selectedDate && (
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {selectedDate.toLocaleDateString('ja-JP', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              weekday: 'short',
-            })}のトレーニング
+              year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+            })}の記録
           </h3>
-          <WorkoutList
-            filterDate={formatDateToString(selectedDate)}
-            showActions={false}
-          />
+
+          {!selectedHasWorkout && !selectedHasCardio && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 text-center">
+              <p className="text-gray-500 dark:text-gray-400">この日の記録はありません</p>
+            </div>
+          )}
+
+          {selectedHasWorkout && (
+            <div>
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">💪 筋トレ</p>
+              <WorkoutList filterDate={formatDateToString(selectedDate)} showActions={false} />
+            </div>
+          )}
+
+          {selectedHasCardio && (
+            <div>
+              <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-2">🏃 カーディオ</p>
+              <CardioList filterDate={formatDateToString(selectedDate)} showActions={false} />
+            </div>
+          )}
         </div>
       )}
 
@@ -178,24 +169,18 @@ export default function WorkoutCalendar() {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           今月のサマリー
         </h3>
-        <div className="grid grid-cols-2 gap-4">
-          {/* 今月のトレーニング日数 */}
+        <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-3xl font-bold text-blue-500">
-              {getThisMonthWorkoutCount()}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              トレーニング日数
-            </p>
+            <p className="text-3xl font-bold text-blue-500">{getThisMonthCount(workoutDates)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">筋トレ日数</p>
           </div>
-          {/* 総トレーニング日数 */}
           <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-3xl font-bold text-green-500">
-              {workoutDates.size}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              総トレーニング日数
-            </p>
+            <p className="text-3xl font-bold text-green-500">{getThisMonthCount(cardioDates)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">カーディオ日数</p>
+          </div>
+          <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-3xl font-bold text-purple-500">{getThisMonthCount(allActiveDates)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">合計アクティブ日</p>
           </div>
         </div>
       </div>
