@@ -139,7 +139,7 @@ export default function CardioForm({ onSaved, initialData, onCancel }: Props) {
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
-          className={inputClass}
+          className="mt-1 block px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white"
         />
       </div>
 
