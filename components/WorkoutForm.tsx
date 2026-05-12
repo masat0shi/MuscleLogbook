@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
-import type { Exercise, WorkoutFormData } from '@/types';
+import type { Exercise, Workout, WorkoutFormData } from '@/types';
 import { EXERCISE_CATEGORIES } from '@/types';
 
 /** コンポーネントのプロパティ */
@@ -31,6 +31,7 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
   const [showAddExercise, setShowAddExercise] = useState(false);                 // 種目追加モーダル表示
   const [newExercise, setNewExercise] = useState({ name: '', category: '胸' }); // 新規種目データ
   const [addingExercise, setAddingExercise] = useState(false);                   // 種目追加中フラグ
+  const [lastRecord, setLastRecord] = useState<Workout | null | undefined>(undefined); // 前回の記録（undefined=未取得）
 
   const supabase = createClient();
   const today = new Date().toISOString().split('T')[0];
@@ -90,6 +91,23 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
       fetchExercises();
     }
   }, []);
+
+  // 選択中の種目が変わったら前回の記録を取得
+  useEffect(() => {
+    if (!formData.exercise_id) return;
+    setLastRecord(undefined);
+    supabase
+      .from('workouts')
+      .select('*')
+      .eq('exercise_id', formData.exercise_id)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        setLastRecord(data ?? null);
+      });
+  }, [formData.exercise_id]);
 
   /**
    * 新しい種目を追加（モーダルから呼び出し）
@@ -356,6 +374,25 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
             }
             return null;
           })()}
+
+          {/* 前回の記録 */}
+          {lastRecord === undefined && (
+            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">前回の記録を取得中...</p>
+          )}
+          {lastRecord === null && (
+            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">前回の記録なし</p>
+          )}
+          {lastRecord && (
+            <div className="mt-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-md text-sm text-gray-600 dark:text-gray-300 flex items-center gap-3">
+              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">前回</span>
+              <span className="font-medium">{lastRecord.weight} kg</span>
+              <span className="text-gray-400">×</span>
+              <span>{lastRecord.reps} 回</span>
+              <span className="text-gray-400">×</span>
+              <span>{lastRecord.sets} セット</span>
+              <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{lastRecord.date}</span>
+            </div>
+          )}
         </div>
 
         <div>

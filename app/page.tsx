@@ -224,7 +224,7 @@ export default function HomePage() {
             すべて見る →
           </Link>
         </div>
-        <WorkoutList limit={5} showActions={false} />
+        <WorkoutList limit={5} showActions={false} showCardio={true} />
       </div>
     </div>
   );
