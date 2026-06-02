@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import NavigationLoader from '@/components/NavigationLoader';
+import RestTimer from '@/components/RestTimer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,6 +28,7 @@ export default function RootLayout({
         <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
           {children}
         </main>
+        <RestTimer />
       </body>
     </html>
   );
