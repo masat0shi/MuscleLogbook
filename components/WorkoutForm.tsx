@@ -92,7 +92,7 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
     }
   }, []);
 
-  // 選択中の種目が変わったら前回の記録を取得
+  // 選択中の種目が変わったら前回の記録を取得し、新規入力時は自動入力
   useEffect(() => {
     if (!formData.exercise_id) return;
     setLastRecord(undefined);
@@ -106,6 +106,11 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
       .single()
       .then(({ data }) => {
         setLastRecord(data ?? null);
+        if (data && !workoutId) {
+          setWeightInput(String(data.weight));
+          setRepsInput(String(data.reps));
+          setSetsInput(String(data.sets));
+        }
       });
   }, [formData.exercise_id]);
 
