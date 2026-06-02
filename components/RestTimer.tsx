@@ -12,53 +12,43 @@ const SOUNDS: { type: SoundType; label: string }[] = [
   { type: 'alarm', label: 'アラーム' },
 ];
 
-function playSound(type: SoundType) {
-  try {
-    const ctx = new AudioContext();
+function playSound(ctx: AudioContext, type: SoundType) {
+  const note = (
+    freq: number,
+    start: number,
+    duration: number,
+    volume = 0.8,
+    waveType: OscillatorType = 'sine',
+  ) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = waveType;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, ctx.currentTime + start);
+    gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + start + 0.01);
+    gain.gain.setValueAtTime(volume, ctx.currentTime + start + duration * 0.7);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
+    osc.start(ctx.currentTime + start);
+    osc.stop(ctx.currentTime + start + duration);
+  };
 
-    const note = (
-      freq: number,
-      start: number,
-      duration: number,
-      volume = 0.8,
-      waveType: OscillatorType = 'sine',
-    ) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = waveType;
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, ctx.currentTime + start);
-      gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + start + 0.01);
-      gain.gain.setValueAtTime(volume, ctx.currentTime + start + duration * 0.7);
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration);
-    };
-
-    if (type === 'beep') {
-      // 短いビープ×3 → 長いビープ
-      note(880, 0, 0.12, 1.0, 'square');
-      note(880, 0.18, 0.12, 1.0, 'square');
-      note(880, 0.36, 0.12, 1.0, 'square');
-      note(1320, 0.6, 0.5, 0.8, 'square');
-    } else if (type === 'chime') {
-      // 上昇する和音チャイム（ドミソ）
-      note(523, 0, 0.6, 0.7);   // C5
-      note(659, 0.25, 0.6, 0.7); // E5
-      note(784, 0.5, 0.9, 0.8);  // G5
-      // 倍音を重ねて豊かに
-      note(1046, 0.5, 0.9, 0.3); // C6
-    } else if (type === 'alarm') {
-      // ゆっくり交互に鳴るアラーム
-      for (let i = 0; i < 3; i++) {
-        note(660, i * 0.5, 0.35, 0.6);
-        note(550, i * 0.5 + 0.25, 0.2, 0.5);
-      }
+  if (type === 'beep') {
+    note(880, 0, 0.12, 1.0, 'square');
+    note(880, 0.18, 0.12, 1.0, 'square');
+    note(880, 0.36, 0.12, 1.0, 'square');
+    note(1320, 0.6, 0.5, 0.8, 'square');
+  } else if (type === 'chime') {
+    note(523, 0, 0.6, 0.7);
+    note(659, 0.25, 0.6, 0.7);
+    note(784, 0.5, 0.9, 0.8);
+    note(1046, 0.5, 0.9, 0.3);
+  } else if (type === 'alarm') {
+    for (let i = 0; i < 3; i++) {
+      note(660, i * 0.5, 0.35, 0.6);
+      note(550, i * 0.5 + 0.25, 0.2, 0.5);
     }
-  } catch {
-    // AudioContext not available
   }
 }
 
@@ -76,6 +66,22 @@ export default function RestTimer() {
   const [finished, setFinished] = useState(false);
   const [sound, setSound] = useState<SoundType>('beep');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+
+  // iOSはユーザー操作時にAudioContextを作成・resumeしておく必要がある
+  const ensureAudioCtx = useCallback(() => {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      } else if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    } catch {
+      // AudioContext not available
+    }
+  }, []);
 
   const stop = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -91,9 +97,10 @@ export default function RestTimer() {
 
   const start = useCallback(() => {
     if (remaining <= 0) return;
+    ensureAudioCtx();
     setFinished(false);
     setRunning(true);
-  }, [remaining]);
+  }, [remaining, ensureAudioCtx]);
 
   useEffect(() => {
     if (!running) return;
@@ -102,14 +109,17 @@ export default function RestTimer() {
         if (prev <= 1) {
           stop();
           setFinished(true);
-          playSound(sound);
+          const ctx = audioCtxRef.current;
+          if (ctx) {
+            ctx.resume().then(() => playSound(ctx, soundRef.current));
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, stop, sound]);
+  }, [running, stop]);
 
   const handlePreset = (sec: number) => {
     setDuration(sec);
@@ -136,8 +146,8 @@ export default function RestTimer() {
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center text-2xl"
         aria-label="休憩タイマーを開く"
       >
-        ⏱
-      </button>
+        ⌛
+</button>
     );
   }
 
@@ -219,7 +229,7 @@ export default function RestTimer() {
               {SOUNDS.map(({ type, label }) => (
                 <button
                   key={type}
-                  onClick={() => { setSound(type); playSound(type); }}
+                  onClick={() => { ensureAudioCtx(); setSound(type); const ctx = audioCtxRef.current; if (ctx) ctx.resume().then(() => playSound(ctx, type)); }}
                   className={`flex-1 text-xs py-1 rounded-md font-medium transition-colors ${
                     sound === type
                       ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-400'
