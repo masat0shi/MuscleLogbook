@@ -37,14 +37,11 @@ const getValue = (log: CardioLog, metric: Metric): number | null => {
   }
 };
 
-const WINDOW_SIZE = 10;
-
 export default function CardioChart() {
   const [logs, setLogs] = useState<CardioLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [metric, setMetric] = useState<Metric>('distance');
   const [filter, setFilter] = useState<ActivityFilter>('all');
-  const [startIndex, setStartIndex] = useState(Infinity);
   const supabase = createClient();
 
   useEffect(() => {
@@ -72,10 +69,6 @@ export default function CardioChart() {
       }),
       value: getValue(l, metric) as number,
     }));
-
-  const maxStart = Math.max(0, chartData.length - WINDOW_SIZE);
-  const clampedStart = Math.min(startIndex, maxStart);
-  const visibleData = chartData.slice(clampedStart, clampedStart + WINDOW_SIZE);
 
   const cfg = METRIC_CONFIG[metric];
   const values = chartData.map((d) => d.value);
@@ -169,7 +162,7 @@ export default function CardioChart() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={visibleData}
+                data={chartData}
                 margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -206,23 +199,6 @@ export default function CardioChart() {
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {/* 日付スライダー */}
-          {chartData.length > WINDOW_SIZE && (
-            <div className="mt-4 px-1">
-              <input
-                type="range"
-                min={0}
-                max={maxStart}
-                value={clampedStart}
-                onChange={(e) => setStartIndex(Number(e.target.value))}
-                className="w-full accent-green-500"
-              />
-              <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
-                <span>{chartData[0]?.date}</span>
-                <span>{chartData[chartData.length - 1]?.date}</span>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

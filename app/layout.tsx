@@ -25,7 +25,7 @@ export default function RootLayout({
         <Suspense>
           <NavigationLoader />
         </Suspense>
-        <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <main className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-16 md:pb-0">
           {children}
         </main>
         <RestTimer />

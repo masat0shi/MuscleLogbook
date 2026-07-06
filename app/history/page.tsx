@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import WorkoutList from '@/components/WorkoutList';
 import CardioList from '@/components/CardioList';
+import TodayShareButton from '@/components/TodayShareButton';
 
 type ActivityType = 'muscle' | 'cardio';
 
@@ -40,9 +41,12 @@ export default function HistoryPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-        履歴
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          履歴
+        </h1>
+        <TodayShareButton />
+      </div>
 
       {/* 筋トレ / カーディオ 切り替え */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">

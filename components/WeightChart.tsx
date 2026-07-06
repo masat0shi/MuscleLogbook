@@ -52,8 +52,6 @@ const formatYAxis = (value: number): string => {
   return String(value);
 };
 
-const WINDOW_SIZE = 10;
-
 export default function WeightChart() {
   // 状態管理
   const [exercises, setExercises] = useState<Exercise[]>([]);           // 種目リスト
@@ -61,7 +59,6 @@ export default function WeightChart() {
   const [chartData, setChartData] = useState<ChartData[]>([]);          // グラフデータ
   const [loading, setLoading] = useState(true);                          // 読み込み中フラグ
   const [metric, setMetric] = useState<'weight' | 'volume'>('weight');  // 表示指標
-  const [startIndex, setStartIndex] = useState(Infinity);
 
   const supabase = createClient();
 
@@ -132,7 +129,6 @@ export default function WeightChart() {
           volume: workout.weight * workout.reps * workout.sets,
         }));
         setChartData(formattedData);
-        setStartIndex(Infinity);
       }
       setLoading(false);
     };
@@ -151,9 +147,6 @@ export default function WeightChart() {
 
   // 選択中の種目名を取得
   const selectedExerciseName = exercises.find(e => e.id === selectedExercise)?.name || '';
-
-  const maxStart = Math.max(0, chartData.length - WINDOW_SIZE);
-  const clampedStart = Math.min(startIndex, maxStart);
 
   // ローディング表示
   if (loading && exercises.length === 0) {
@@ -241,7 +234,7 @@ export default function WeightChart() {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={chartData.slice(clampedStart, clampedStart + WINDOW_SIZE)}
+                data={chartData}
                 margin={{
                   top: 5,
                   right: 30,
@@ -288,23 +281,6 @@ export default function WeightChart() {
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {/* 日付スライダー（データが WINDOW_SIZE より多い場合のみ表示） */}
-          {chartData.length > WINDOW_SIZE && (
-            <div className="mt-4 px-1">
-              <input
-                type="range"
-                min={0}
-                max={maxStart}
-                value={clampedStart}
-                onChange={(e) => setStartIndex(Number(e.target.value))}
-                className="w-full accent-blue-500"
-              />
-              <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
-                <span>{chartData[0]?.date}</span>
-                <span>{chartData[chartData.length - 1]?.date}</span>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
