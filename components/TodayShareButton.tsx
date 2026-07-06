@@ -156,10 +156,21 @@ export default function TodayShareButton() {
         scale: 2,
         useCORS: true,
       });
-      const link = document.createElement('a');
-      link.download = `musclelogbook-${today}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const filename = `musclelogbook-${today}.png`;
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: '今日のトレーニング' });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+      }, 'image/png');
     } catch (e) {
       console.error(e);
     }

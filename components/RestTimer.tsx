@@ -143,7 +143,7 @@ export default function RestTimer() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-40 md:bottom-6 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center text-2xl"
+        className="bottom-above-nav fixed right-6 z-40 md:bottom-6 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center text-2xl"
         aria-label="休憩タイマーを開く"
       >
         ⌛
@@ -152,7 +152,7 @@ export default function RestTimer() {
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-40 md:bottom-4 md:right-4 pointer-events-none" style={{ width: 'min(320px, calc(100vw - 2rem))' }}>
+    <div className="bottom-above-nav fixed right-4 z-40 md:bottom-4 md:right-4 pointer-events-none" style={{ width: 'min(320px, calc(100vw - 2rem))' }}>
       <div className="pointer-events-auto w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2 bg-indigo-600 text-white">

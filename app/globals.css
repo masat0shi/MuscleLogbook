@@ -6,10 +6,20 @@
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
+@media (max-width: 767px) {
+  .pb-above-nav {
+    padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  }
+  .bottom-above-nav {
+    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem);
+  }
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 249, 250, 251;
   --background-end-rgb: 255, 255, 255;
+  --nav-h: 4rem;
 }
 
 @media (prefers-color-scheme: dark) {
