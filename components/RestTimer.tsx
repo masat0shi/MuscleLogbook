@@ -152,8 +152,8 @@ export default function RestTimer() {
   }
 
   return (
-    <div className="fixed bottom-20 left-0 right-0 z-40 md:bottom-0 flex justify-center pb-4 px-4 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="fixed bottom-24 right-4 z-40 md:bottom-4 md:right-4 pointer-events-none" style={{ width: 'min(320px, calc(100vw - 2rem))' }}>
+      <div className="pointer-events-auto w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2 bg-indigo-600 text-white">
           <span className="font-semibold text-sm">⏱ 休憩タイマー</span>
