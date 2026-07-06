@@ -97,13 +97,13 @@ export default function Navbar() {
 
     {/* Mobile Bottom Navigation */}
     {user && (
-      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-inset-bottom">
-        <div className="flex">
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex bottom-nav">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              className={`flex-1 flex flex-col items-center py-3 transition-colors ${
                 pathname === item.href
                   ? 'text-blue-500'
                   : 'text-gray-400 dark:text-gray-500'

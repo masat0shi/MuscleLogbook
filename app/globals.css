@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+.bottom-nav {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 249, 250, 251;
