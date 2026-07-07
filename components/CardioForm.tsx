@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
+import { getLogicalToday } from '@/lib/date';
 import type { CardioActivityType } from '@/types';
 
 interface InitialData {
@@ -23,7 +24,7 @@ interface Props {
 
 export default function CardioForm({ onSaved, initialData, onCancel }: Props) {
   const isEditing = !!initialData;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLogicalToday();
 
   const [activityType, setActivityType] = useState<CardioActivityType>(
     initialData?.activity_type ?? 'running'

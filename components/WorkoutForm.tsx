@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
+import { getLogicalToday } from '@/lib/date';
 import type { Exercise, Workout, WorkoutFormData } from '@/types';
 import { EXERCISE_CATEGORIES } from '@/types';
 
@@ -34,7 +35,7 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
   const [lastRecord, setLastRecord] = useState<Workout | null | undefined>(undefined); // 前回の記録（undefined=未取得）
 
   const supabase = createClient();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLogicalToday();
 
   // 数値入力は文字列で管理（空欄表示を可能にするため）
   const [weightInput, setWeightInput] = useState(initialData?.weight ? String(initialData.weight) : '');

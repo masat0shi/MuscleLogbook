@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase';
+import { getLogicalToday } from '@/lib/date';
 import type { Workout, CardioLog } from '@/types';
 
 const activityLabel: Record<string, string> = {
@@ -118,7 +119,7 @@ export default function TodayShareButton() {
   const [empty, setEmpty] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLogicalToday();
 
   const handleOpen = async () => {
     setLoading(true);
@@ -186,7 +187,7 @@ export default function TodayShareButton() {
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
-        今日の記録を保存
+        今日の記録を共有
       </button>
 
       {open && (
@@ -210,11 +211,11 @@ export default function TodayShareButton() {
                     disabled={saving}
                     className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
                   >
-                    {saving ? '保存中...' : '📥 画像として保存'}
+                    {saving ? '保存中...' : '📥 記録を共有'}
                   </button>
                   <button
                     onClick={() => setOpen(false)}
-                    className="px-5 py-2.5 bg-white/20 hover:bg-white/30 text-white font-medium rounded-lg transition-colors"
+                    className="px-5 py-2.5 bg-white/40 hover:bg-white/50 text-white font-medium rounded-lg transition-colors"
                   >
                     閉じる
                   </button>
