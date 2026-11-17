@@ -4,6 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const PRESETS = [60, 90, 120, 180];
 
+// 無音ループ音声（50ms・8bit WAV）。iOSはバックグラウンドでも
+// 再生中のaudio要素があると実行が継続されやすいため、タイマー稼働中は
+// これを再生し続けておく（完全なバックグラウンド再生は保証されない）。
+const SILENT_LOOP_DATA_URI =
+  'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
+
 type SoundType = 'beep' | 'chime' | 'alarm';
 
 const SOUNDS: { type: SoundType; label: string }[] = [
@@ -67,6 +73,8 @@ export default function RestTimer() {
   const [sound, setSound] = useState<SoundType>('beep');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const keepAliveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const endTimeRef = useRef<number | null>(null); // タイマー終了予定時刻（壁時計、ms）
   const soundRef = useRef(sound);
   soundRef.current = sound;
 
@@ -83,14 +91,27 @@ export default function RestTimer() {
     }
   }, []);
 
+  // バックグラウンドでも実行が継続されやすくなるよう、無音ループ再生を確保する
+  const ensureKeepAliveAudio = useCallback(() => {
+    if (!keepAliveAudioRef.current) {
+      const audio = new Audio(SILENT_LOOP_DATA_URI);
+      audio.loop = true;
+      audio.setAttribute('playsinline', 'true');
+      keepAliveAudioRef.current = audio;
+    }
+    return keepAliveAudioRef.current;
+  }, []);
+
   const stop = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
+    keepAliveAudioRef.current?.pause();
     setRunning(false);
   }, []);
 
   const reset = useCallback((sec: number) => {
     stop();
+    endTimeRef.current = null;
     setRemaining(sec);
     setFinished(false);
   }, [stop]);
@@ -98,28 +119,45 @@ export default function RestTimer() {
   const start = useCallback(() => {
     if (remaining <= 0) return;
     ensureAudioCtx();
+    ensureKeepAliveAudio().play().catch(() => {});
+    endTimeRef.current = Date.now() + remaining * 1000;
     setFinished(false);
     setRunning(true);
-  }, [remaining, ensureAudioCtx]);
+  }, [remaining, ensureAudioCtx, ensureKeepAliveAudio]);
+
+  // 壁時計基準で残り時間を再計算する（setIntervalがバックグラウンドで
+  // 間引かれても、復帰時に正しい残り時間・終了判定ができるようにする）
+  const tick = useCallback(() => {
+    if (endTimeRef.current === null) return;
+    const secLeft = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+    setRemaining(secLeft);
+    if (secLeft <= 0) {
+      stop();
+      setFinished(true);
+      const ctx = audioCtxRef.current;
+      if (ctx) {
+        ctx.resume().then(() => playSound(ctx, soundRef.current));
+      }
+    }
+  }, [stop]);
 
   useEffect(() => {
     if (!running) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev <= 1) {
-          stop();
-          setFinished(true);
-          const ctx = audioCtxRef.current;
-          if (ctx) {
-            ctx.resume().then(() => playSound(ctx, soundRef.current));
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, stop]);
+  }, [running, tick]);
+
+  // 画面に戻ってきた瞬間に残り時間・終了判定を即座に補正する
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && running) {
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [running, tick]);
 
   const handlePreset = (sec: number) => {
     setDuration(sec);
