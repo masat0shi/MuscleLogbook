@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import WorkoutForm from '@/components/WorkoutForm';
 import CardioForm from '@/components/CardioForm';
-import type { Exercise } from '@/types';
+import type { Exercise, WorkoutMenuWithItems } from '@/types';
 
 type ActivityType = 'muscle' | 'cardio';
 
@@ -14,6 +14,7 @@ export default function RecordPage() {
   const [loading, setLoading] = useState(true);
   const [activityType, setActivityType] = useState<ActivityType>('muscle');
   const [preloadedExercises, setPreloadedExercises] = useState<Exercise[]>([]);
+  const [menus, setMenus] = useState<WorkoutMenuWithItems[]>([]);
   const router = useRouter();
   const supabase = createClient();
 
@@ -23,10 +24,15 @@ export default function RecordPage() {
         { data: { user } },
         { data: exercisesData },
         { data: hiddenData },
+        { data: menusData },
       ] = await Promise.all([
         supabase.auth.getUser(),
         supabase.from('exercises').select('*').order('category').order('name'),
         supabase.from('hidden_exercises').select('exercise_id'),
+        supabase
+          .from('workout_menus')
+          .select('*, items:workout_menu_items(id, exercise_id, order_index, menu_id, exercise:exercises(id, name, category))')
+          .order('created_at', { ascending: true }),
       ]);
 
       if (!user) {
@@ -38,6 +44,10 @@ export default function RecordPage() {
       const hiddenIds = new Set((hiddenData || []).map((h: { exercise_id: string }) => h.exercise_id));
       const visible = (exercisesData || []).filter((e: Exercise) => !hiddenIds.has(e.id));
       setPreloadedExercises(visible);
+      setMenus((menusData || []).map((m: WorkoutMenuWithItems) => ({
+        ...m,
+        items: [...m.items].sort((a, b) => a.order_index - b.order_index),
+      })));
       setIsAuthenticated(true);
       setLoading(false);
     };
@@ -86,7 +96,7 @@ export default function RecordPage() {
 
       {activityType === 'muscle' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <WorkoutForm preloadedExercises={preloadedExercises} />
+          <WorkoutForm preloadedExercises={preloadedExercises} menus={menus} />
         </div>
       )}
       {activityType === 'cardio' && (

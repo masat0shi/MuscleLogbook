@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { getLogicalToday } from '@/lib/date';
-import type { Exercise, Workout, WorkoutFormData } from '@/types';
+import type { Exercise, Workout, WorkoutFormData, WorkoutMenuWithItems } from '@/types';
 import { EXERCISE_CATEGORIES } from '@/types';
 
 /** コンポーネントのプロパティ */
@@ -19,9 +19,10 @@ interface WorkoutFormProps {
   initialData?: WorkoutFormData; // 編集時の初期データ
   workoutId?: string;          // 編集対象のワークアウトID（新規作成時はundefined）
   preloadedExercises?: Exercise[]; // 事前取得済みの種目リスト（record/page.tsx から渡される）
+  menus?: WorkoutMenuWithItems[]; // 保存済みのトレーニングメニュー一覧
 }
 
-export default function WorkoutForm({ onSuccess, initialData, workoutId, preloadedExercises }: WorkoutFormProps) {
+export default function WorkoutForm({ onSuccess, initialData, workoutId, preloadedExercises, menus }: WorkoutFormProps) {
   // 状態管理
   const [exercises, setExercises] = useState<Exercise[]>(preloadedExercises ?? []);
   const [exercisesLoading, setExercisesLoading] = useState(!preloadedExercises);
@@ -33,6 +34,8 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
   const [newExercise, setNewExercise] = useState({ name: '', category: '胸' }); // 新規種目データ
   const [addingExercise, setAddingExercise] = useState(false);                   // 種目追加中フラグ
   const [lastRecord, setLastRecord] = useState<Workout | null | undefined>(undefined); // 前回の記録（undefined=未取得）
+  const [selectedMenuId, setSelectedMenuId] = useState('');                    // 選択中のメニューID（未選択は全種目）
+  const [loggedExerciseIds, setLoggedExerciseIds] = useState<Set<string>>(new Set()); // 選択日に記録済みの種目ID
 
   const supabase = createClient();
   const today = getLogicalToday();
@@ -114,6 +117,36 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
         }
       });
   }, [formData.exercise_id]);
+
+  const selectedMenu = (menus ?? []).find(m => m.id === selectedMenuId);
+
+  // メニューを選択したら、その日に記録済みの種目を取得して進捗チェックに使う
+  useEffect(() => {
+    if (!selectedMenu) {
+      setLoggedExerciseIds(new Set());
+      return;
+    }
+    const exerciseIds = selectedMenu.items.map(i => i.exercise_id);
+    supabase
+      .from('workouts')
+      .select('exercise_id')
+      .eq('date', formData.date)
+      .in('exercise_id', exerciseIds)
+      .then(({ data }) => {
+        setLoggedExerciseIds(new Set((data || []).map(w => w.exercise_id)));
+      });
+  }, [selectedMenuId, formData.date]);
+
+  /**
+   * メニューを選択する。未記録の最初の種目を自動で選択状態にする。
+   */
+  const handleSelectMenu = (menuId: string) => {
+    setSelectedMenuId(menuId);
+    const menu = (menus ?? []).find(m => m.id === menuId);
+    if (menu && menu.items.length > 0) {
+      setFormData(prev => ({ ...prev, exercise_id: menu.items[0].exercise_id }));
+    }
+  };
 
   /**
    * 新しい種目を追加（モーダルから呼び出し）
@@ -224,6 +257,17 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
         setWeightInput('');
         setRepsInput('');
         setSetsInput('');
+
+        // メニュー選択中なら、記録済みにして次の未記録の種目へ自動で進む
+        if (selectedMenu) {
+          const nextLoggedIds = new Set(loggedExerciseIds).add(formData.exercise_id);
+          setLoggedExerciseIds(nextLoggedIds);
+          const nextItem = selectedMenu.items.find(i => !nextLoggedIds.has(i.exercise_id));
+          if (nextItem) {
+            setFormData(prev => ({ ...prev, exercise_id: nextItem.exercise_id }));
+          }
+        }
+
         onSuccess?.();
       }
     }
@@ -238,6 +282,13 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
     acc[exercise.category].push(exercise);
     return acc;
   }, {} as Record<string, Exercise[]>);
+
+  // メニュー選択中はその種目だけに絞る
+  const selectableExercises = selectedMenu
+    ? selectedMenu.items
+        .map(item => exercises.find(e => e.id === item.exercise_id))
+        .filter((e): e is Exercise => !!e)
+    : exercises;
 
   return (
     <div className="space-y-6">
@@ -318,6 +369,55 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
           </div>
         )}
 
+        {/* メニュー選択 */}
+        {menus && menus.length > 0 && (
+          <div>
+            <label
+              htmlFor="menu"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              メニュー
+            </label>
+            <select
+              id="menu"
+              value={selectedMenuId}
+              onChange={(e) => handleSelectMenu(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">全種目から選ぶ</option>
+              {menus.map((menu) => (
+                <option key={menu.id} value={menu.id}>{menu.name}</option>
+              ))}
+            </select>
+
+            {/* メニューの進捗チェックリスト */}
+            {selectedMenu && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedMenu.items.map((item) => {
+                  const done = loggedExerciseIds.has(item.exercise_id);
+                  const active = item.exercise_id === formData.exercise_id;
+                  return (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => setFormData(prev => ({ ...prev, exercise_id: item.exercise_id }))}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        active
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : done
+                            ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'
+                      }`}
+                    >
+                      {done ? '✓ ' : ''}{item.exercise?.name ?? ''}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between mb-1">
             <label
@@ -347,6 +447,12 @@ export default function WorkoutForm({ onSuccess, initialData, workoutId, preload
           >
             {exercisesLoading ? (
               <option>読み込み中...</option>
+            ) : selectedMenu ? (
+              selectableExercises.map((exercise) => (
+                <option key={exercise.id} value={exercise.id}>
+                  {exercise.name}{exercise.user_id ? ' ★' : ''}
+                </option>
+              ))
             ) : (
               Object.entries(groupedExercises).map(([category, categoryExercises]) => (
                 <optgroup key={category} label={category}>

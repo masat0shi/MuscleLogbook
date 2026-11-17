@@ -45,6 +45,27 @@ export interface ExerciseVideoUrl {
   video_url: string;
 }
 
+/** トレーニングメニュー（例: 背中+二頭の日） */
+export interface WorkoutMenu {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+}
+
+/** メニューに含まれる種目 */
+export interface WorkoutMenuItem {
+  id: string;
+  menu_id: string;
+  exercise_id: string;
+  order_index: number;
+  exercise?: Exercise;
+}
+
+export interface WorkoutMenuWithItems extends WorkoutMenu {
+  items: WorkoutMenuItem[];
+}
+
 export type ExerciseCategory = '胸' | '背中' | '脚' | '肩' | '腕' | 'コア';
 
 export type CardioActivityType = 'running' | 'walking';
